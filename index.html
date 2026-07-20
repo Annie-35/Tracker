@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Field Book — Strength, Budget & Meals</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1F5C55">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Field Book">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #EEF0E9;
+    --paper: #FBFBF6;
+    --ink: #232F29;
+    --ink-soft: #5B6960;
+    --line: #C4CDBD;
+    --teal: #1F5C55;
+    --ochre: #C4901F;
+    --brick: #A63F2E;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(31,92,85,0.05) 28px),
+      repeating-linear-gradient(90deg, transparent, transparent 27px, rgba(31,92,85,0.05) 28px);
+    color: var(--ink);
+    font-family: 'Source Serif 4', Georgia, serif;
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; }
+  header { margin-bottom: 20px; }
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin: 0 0 4px;
+  }
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: clamp(26px, 5vw, 36px);
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  .sub { color: var(--ink-soft); font-size: 15px; margin: 0; }
+
+  .contour {
+    height: 14px;
+    margin: 20px 0;
+    background-repeat: repeat-x;
+    background-size: 60px 14px;
+    opacity: 0.55;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='14'%3E%3Cpath d='M0 7 Q 15 0 30 7 T 60 7' stroke='%231F5C55' fill='none' stroke-width='1.4'/%3E%3C/svg%3E");
+  }
+
+  nav.tabs {
+    display: flex;
+    gap: 6px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 20px;
+  }
+  nav.tabs button {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 500;
+    font-size: 14.5px;
+    background: none;
+    border: none;
+    padding: 10px 4px;
+    margin-right: 18px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  nav.tabs button.active { color: var(--ink); border-bottom-color: var(--ochre); }
+  nav.tabs button:hover { color: var(--ink); }
+
+  .panel { display: none; animation: fade 0.2s ease; }
+  .panel.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(3px);} to { opacity:1; transform:none;} }
+
+  .card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 18px 16px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 17px;
+    margin: 0 0 12px;
+    font-weight: 600;
+  }
+  .card h3 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 10px;
+  }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  @media (max-width: 520px) { .grid3 { grid-template-columns: 1fr 1fr; } }
+
+  label { font-size: 12.5px; color: var(--ink-soft); display: block; margin-bottom: 4px; font-family: 'IBM Plex Mono', monospace; }
+  input, select, textarea {
+    width: 100%;
+    padding: 8px 9px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-size: 14.5px;
+    color: var(--ink);
+  }
+  textarea { resize: vertical; min-height: 60px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+
+  .field { margin-bottom: 10px; }
+  .row-actions { display:flex; gap:8px; margin-top: 10px; }
+  button.action {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    background: var(--teal);
+    color: #fff;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button.action.secondary { background: transparent; color: var(--brick); border: 1px solid var(--brick); }
+  button.action:hover { filter: brightness(1.08); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); }
+  th { font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); font-weight: 500; }
+  td.num { font-family: 'IBM Plex Mono', monospace; }
+  .del { cursor: pointer; color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+  .del:hover { color: var(--brick); }
+
+  .stat-strip { display:flex; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  .stat { flex: 1; min-width: 120px; }
+  .stat .val { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 600; }
+  .stat .lbl { font-size: 11.5px; color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: 0.06em; }
+  .over { color: var(--brick); }
+  .under { color: var(--teal); }
+
+  .day-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .day-card { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: #fff; }
+  .day-card h4 { margin: 0 0 8px; font-family: 'Space Grotesk', sans-serif; font-size: 14.5px; display:flex; justify-content:space-between; align-items:baseline;}
+  .day-card h4 span.tag { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--ochre); font-weight: 400; }
+  .meal-line { font-size: 13.5px; margin: 3px 0; color: var(--ink); }
+  .meal-line b { color: var(--ink-soft); font-weight: 500; font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase; margin-right: 6px; }
+
+  .status { font-size: 12px; color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace; margin-top: 8px; min-height: 16px; }
+  .empty { color: var(--ink-soft); font-size: 13.5px; font-style: italic; padding: 6px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Personal Field Book</p>
+    <h1>Strength · Budget · Meals</h1>
+    <p class="sub">One log for the week — lift, spend, and eat on purpose.</p>
+  </header>
+  <div class="contour"></div>
+
+  <nav class="tabs">
+    <button data-tab="fitness" class="active">Fitness</button>
+    <button data-tab="budget">Budget</button>
+    <button data-tab="meals">Meals</button>
+  </nav>
+
+  <!-- FITNESS -->
+  <section id="fitness" class="panel active">
+    <div class="card">
+      <h3>This week's split (reference)</h3>
+      <table>
+        <tr><th>Day</th><th>Focus</th><th>Key lifts</th></tr>
+        <tr><td>Mon</td><td>Upper</td><td class="num">Push-ups/Bench, Rows, OHP, Pull-ups</td></tr>
+        <tr><td>Tue</td><td>Lower</td><td class="num">Squats, RDL, Lunges, Calves</td></tr>
+        <tr><td>Wed</td><td>Rest</td><td class="num">—</td></tr>
+        <tr><td>Thu</td><td>Upper</td><td class="num">Push-ups/Bench, Rows, OHP, Pull-ups</td></tr>
+        <tr><td>Fri</td><td>Lower</td><td class="num">Squats, RDL, Lunges, Calves</td></tr>
+        <tr><td>Sat/Sun</td><td>Rest / light activity</td><td class="num">—</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Log a session</h2>
+      <div class="grid3">
+        <div class="field"><label>Date</label><input type="date" id="f-date"></div>
+        <div class="field"><label>Exercise</label><input type="text" id="f-exercise" placeholder="e.g. Back squat"></div>
+        <div class="field"><label>Sets × Reps</label><input type="text" id="f-setsreps" placeholder="e.g. 4x8"></div>
+      </div>
+      <div class="field" style="max-width:200px;"><label>Weight (kg)</label><input type="number" id="f-weight" placeholder="0"></div>
+      <div class="row-actions"><button class="action" onclick="addFitness()">Log it</button></div>
+      <div class="status" id="f-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Recent log</h2>
+      <div id="f-list"></div>
+    </div>
+  </section>
+
+  <!-- BUDGET -->
+  <section id="budget" class="panel">
+    <div class="card">
+      <h2>This week</h2>
+      <div class="stat-strip">
+        <div class="stat"><div class="val" id="b-income">KES 0</div><div class="lbl">Income logged</div></div>
+        <div class="stat"><div class="val" id="b-spent">KES 0</div><div class="lbl">Spent</div></div>
+        <div class="stat"><div class="val" id="b-left">KES 0</div><div class="lbl">Left / over</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Add an entry</h2>
+      <div class="grid3">
+        <div class="field"><label>Date</label><input type="date" id="b-date"></div>
+        <div class="field">
+          <label>Type</label>
+          <select id="b-type">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </div>
+        <div class="field"><label>Amount (KES)</label><input type="number" id="b-amount" placeholder="0"></div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label>Category</label>
+          <select id="b-category">
+            <option>Essentials</option>
+            <option>Savings</option>
+            <option>Discretionary</option>
+            <option>Freelance/business</option>
+            <option>Base income</option>
+            <option>Freelance income</option>
+          </select>
+        </div>
+        <div class="field"><label>Note</label><input type="text" id="b-note" placeholder="optional"></div>
+      </div>
+      <div class="row-actions"><button class="action" onclick="addBudget()">Add entry</button></div>
+      <div class="status" id="b-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Entries this week</h2>
+      <div id="b-list"></div>
+    </div>
+  </section>
+
+  <!-- MEALS -->
+  <section id="meals" class="panel">
+    <div class="card">
+      <h3>High-protein prep, built for strength — local & accessible</h3>
+      <p style="font-size:13.5px; color:var(--ink-soft); margin:0 0 6px;">Rough target: 1.6–2g protein per kg bodyweight/day. Batch-cook the staples (beans, rice, ugali, boiled eggs) on Sunday so weekday meals are just assembly.</p>
+    </div>
+    <div class="day-grid" id="meal-grid"></div>
+
+    <div class="card">
+      <h2>Grocery list</h2>
+      <p style="font-size:12.5px; color:var(--ink-soft); margin:0 0 8px;">Edit freely — saved automatically.</p>
+      <textarea id="grocery" rows="8" placeholder="Eggs (2 trays)&#10;Chicken 2kg&#10;Tilapia or omena&#10;Beans / ndengu 2kg&#10;Milk 3L&#10;Sukuma wiki&#10;Rice, ugali flour&#10;Groundnuts, avocado, sweet potatoes"></textarea>
+      <div class="row-actions"><button class="action" onclick="saveGroceries()">Save list</button></div>
+      <div class="status" id="g-status"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+// Local storage shim — mirrors the get/set shape used below, but persists
+// on-device via localStorage so this works as a standalone hosted app.
+const storage = {
+  async get(key) {
+    const raw = localStorage.getItem(key);
+    return raw === null ? null : { key, value: raw };
+  },
+  async set(key, value) {
+    localStorage.setItem(key, value);
+    return { key, value };
+  }
+};
+
+const DEFAULT_MEALS = [
+  {day:"Monday", tag:"Upper day", b:"Eggs + sukuma wiki + sweet potato", l:"Chicken + rice + beans", d:"Fish + ugali + greens"},
+  {day:"Tuesday", tag:"Lower day", b:"Milk + boiled eggs + fruit", l:"Beans/ndengu + rice + avocado", d:"Chicken stew + greens"},
+  {day:"Wednesday", tag:"Rest", b:"Groundnut porridge + egg", l:"Leftover stew + ugali", d:"Fish + rice + greens"},
+  {day:"Thursday", tag:"Upper day", b:"Eggs + sukuma wiki + sweet potato", l:"Chicken + rice + beans", d:"Fish + ugali + greens"},
+  {day:"Friday", tag:"Lower day", b:"Milk + boiled eggs + fruit", l:"Beans/ndengu + rice + avocado", d:"Chicken stew + greens"},
+  {day:"Saturday", tag:"Light", b:"Omelette + avocado", l:"Fish + ugali + greens", d:"Whatever's left + extra veg"},
+  {day:"Sunday", tag:"Prep day", b:"Big breakfast, eggs + leftovers", l:"Batch-cook beans, rice, ugali, boil eggs for the week", d:"Simple: chicken/fish + greens"},
+];
+
+let tab = 'fitness';
+document.querySelectorAll('nav.tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    tab = btn.dataset.tab;
+    document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b===btn));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id===tab));
+  });
+});
+
+function fmtKES(n) { return 'KES ' + Number(n).toLocaleString('en-KE', {maximumFractionDigits:0}); }
+
+// ---------- FITNESS ----------
+async function loadFitness() {
+  let entries = [];
+  try {
+    const res = await storage.get('fitness-log');
+    if (res && res.value) entries = JSON.parse(res.value);
+  } catch(e) { /* no data yet */ }
+  renderFitness(entries);
+  return entries;
+}
+function renderFitness(entries) {
+  const list = document.getElementById('f-list');
+  if (!entries.length) { list.innerHTML = '<div class="empty">No sessions logged yet.</div>'; return; }
+  const rows = entries.slice().reverse().map((e,i) => {
+    const realIdx = entries.length - 1 - i;
+    return `<tr><td>${e.date||''}</td><td>${e.exercise}</td><td class="num">${e.setsreps||''}</td><td class="num">${e.weight?e.weight+'kg':''}</td><td class="del" onclick="delFitness(${realIdx})">remove</td></tr>`;
+  }).join('');
+  list.innerHTML = `<table><tr><th>Date</th><th>Exercise</th><th>Sets×Reps</th><th>Weight</th><th></th></tr>${rows}</table>`;
+}
+async function addFitness() {
+  const date = document.getElementById('f-date').value;
+  const exercise = document.getElementById('f-exercise').value.trim();
+  const setsreps = document.getElementById('f-setsreps').value.trim();
+  const weight = document.getElementById('f-weight').value;
+  const statusEl = document.getElementById('f-status');
+  if (!exercise) { statusEl.textContent = 'Add an exercise name first.'; return; }
+  try {
+    const entries = await loadFitness();
+    entries.push({date, exercise, setsreps, weight});
+    const result = await storage.set('fitness-log', JSON.stringify(entries));
+    if (!result) throw new Error('save failed');
+    renderFitness(entries);
+    document.getElementById('f-exercise').value='';
+    document.getElementById('f-setsreps').value='';
+    document.getElementById('f-weight').value='';
+    statusEl.textContent = 'Logged.';
+    setTimeout(()=>statusEl.textContent='',1500);
+  } catch(e) { statusEl.textContent = 'Could not save — try again.'; }
+}
+async function delFitness(idx) {
+  try {
+    const entries = await loadFitness();
+    entries.splice(idx,1);
+    await storage.set('fitness-log', JSON.stringify(entries));
+    renderFitness(entries);
+  } catch(e) { console.error(e); }
+}
+
+// ---------- BUDGET ----------
+async function loadBudget() {
+  let entries = [];
+  try {
+    const res = await storage.get('budget-log');
+    if (res && res.value) entries = JSON.parse(res.value);
+  } catch(e) { /* no data yet */ }
+  renderBudget(entries);
+  return entries;
+}
+function renderBudget(entries) {
+  const list = document.getElementById('b-list');
+  let income = 0, spent = 0;
+  entries.forEach(e => { if (e.type==='income') income += Number(e.amount); else spent += Number(e.amount); });
+  document.getElementById('b-income').textContent = fmtKES(income);
+  document.getElementById('b-spent').textContent = fmtKES(spent);
+  const left = income - spent;
+  const leftEl = document.getElementById('b-left');
+  leftEl.textContent = fmtKES(Math.abs(left));
+  leftEl.className = 'val ' + (left < 0 ? 'over' : 'under');
+
+  if (!entries.length) { list.innerHTML = '<div class="empty">No entries yet this week.</div>'; return; }
+  const rows = entries.slice().reverse().map((e,i) => {
+    const realIdx = entries.length - 1 - i;
+    const sign = e.type === 'income' ? '+' : '−';
+    return `<tr><td>${e.date||''}</td><td>${e.category}</td><td>${e.note||''}</td><td class="num">${sign}${fmtKES(e.amount)}</td><td class="del" onclick="delBudget(${realIdx})">remove</td></tr>`;
+  }).join('');
+  list.innerHTML = `<table><tr><th>Date</th><th>Category</th><th>Note</th><th>Amount</th><th></th></tr>${rows}</table>`;
+}
+async function addBudget() {
+  const date = document.getElementById('b-date').value;
+  const type = document.getElementById('b-type').value;
+  const amount = document.getElementById('b-amount').value;
+  const category = document.getElementById('b-category').value;
+  const note = document.getElementById('b-note').value.trim();
+  const statusEl = document.getElementById('b-status');
+  if (!amount || Number(amount) <= 0) { statusEl.textContent = 'Enter an amount first.'; return; }
+  try {
+    const entries = await loadBudget();
+    entries.push({date, type, amount, category, note});
+    const result = await storage.set('budget-log', JSON.stringify(entries));
+    if (!result) throw new Error('save failed');
+    renderBudget(entries);
+    document.getElementById('b-amount').value='';
+    document.getElementById('b-note').value='';
+    statusEl.textContent = 'Added.';
+    setTimeout(()=>statusEl.textContent='',1500);
+  } catch(e) { statusEl.textContent = 'Could not save — try again.'; }
+}
+async function delBudget(idx) {
+  try {
+    const entries = await loadBudget();
+    entries.splice(idx,1);
+    await storage.set('budget-log', JSON.stringify(entries));
+    renderBudget(entries);
+  } catch(e) { console.error(e); }
+}
+
+// ---------- MEALS ----------
+function renderMeals(meals) {
+  const grid = document.getElementById('meal-grid');
+  grid.innerHTML = meals.map(m => `
+    <div class="day-card">
+      <h4>${m.day} <span class="tag">${m.tag}</span></h4>
+      <div class="meal-line"><b>Breakfast</b>${m.b}</div>
+      <div class="meal-line"><b>Lunch</b>${m.l}</div>
+      <div class="meal-line"><b>Dinner</b>${m.d}</div>
+    </div>
+  `).join('');
+}
+async function loadMeals() {
+  let meals = DEFAULT_MEALS;
+  try {
+    const res = await storage.get('meals-plan');
+    if (res && res.value) meals = JSON.parse(res.value);
+  } catch(e) {
+    try { await storage.set('meals-plan', JSON.stringify(DEFAULT_MEALS)); } catch(e2) {}
+  }
+  renderMeals(meals);
+}
+async function saveGroceries() {
+  const val = document.getElementById('grocery').value;
+  const statusEl = document.getElementById('g-status');
+  try {
+    const result = await storage.set('grocery-list', val);
+    if (!result) throw new Error('save failed');
+    statusEl.textContent = 'Saved.';
+    setTimeout(()=>statusEl.textContent='',1500);
+  } catch(e) { statusEl.textContent = 'Could not save — try again.'; }
+}
+async function loadGroceries() {
+  try {
+    const res = await storage.get('grocery-list');
+    if (res && res.value) document.getElementById('grocery').value = res.value;
+  } catch(e) { /* nothing saved yet */ }
+}
+
+function todayLocalStr() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// init
+(async function init() {
+  document.getElementById('f-date').value = todayLocalStr();
+  document.getElementById('b-date').value = todayLocalStr();
+  await loadFitness();
+  await loadBudget();
+  await loadMeals();
+  await loadGroceries();
+})();
+</script>
+</body>
+</html>
