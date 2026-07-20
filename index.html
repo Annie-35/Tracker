@@ -165,8 +165,18 @@
   .day-card { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: #fff; }
   .day-card h4 { margin: 0 0 8px; font-family: 'Space Grotesk', sans-serif; font-size: 14.5px; display:flex; justify-content:space-between; align-items:baseline;}
   .day-card h4 span.tag { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--ochre); font-weight: 400; }
-  .meal-line { font-size: 13.5px; margin: 3px 0; color: var(--ink); }
-  .meal-line b { color: var(--ink-soft); font-weight: 500; font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase; margin-right: 6px; }
+  .meal-field { display:flex; align-items:center; gap:6px; margin: 4px 0; }
+  .meal-field b { color: var(--ink-soft); font-weight: 500; font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase; width: 62px; flex-shrink: 0; }
+  .meal-field input {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: #fff;
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-size: 13.5px;
+    color: var(--ink);
+  }
 
   .status { font-size: 12px; color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace; margin-top: 8px; min-height: 16px; }
   .empty { color: var(--ink-soft); font-size: 13.5px; font-style: italic; padding: 6px 0; }
@@ -195,6 +205,51 @@
         <div class="stat"><div class="val" id="f-month-count">0</div><div class="lbl">Sessions this month</div></div>
       </div>
     </div>
+    <div class="card">
+      <h2>Body goals</h2>
+      <p style="font-size:12.5px; color:var(--ink-soft); margin:0 0 10px;">Leave any target blank if you're not tracking it. Add one custom metric for anything else — glutes, chest, whatever.</p>
+      <div class="grid3">
+        <div class="field"><label>Target weight (kg)</label><input type="number" id="g-weight" step="0.1"></div>
+        <div class="field"><label>Target waist (cm)</label><input type="number" id="g-waist" step="0.1"></div>
+        <div class="field"><label>Target flexibility (cm, sit-reach)</label><input type="number" id="g-flex" step="0.1"></div>
+      </div>
+      <div class="grid3">
+        <div class="field"><label>Custom metric label</label><input type="text" id="g-custom-label" placeholder="e.g. Hip circumference"></div>
+        <div class="field"><label>Custom target</label><input type="number" id="g-custom-target" step="0.1"></div>
+        <div class="field"><label>Goal direction</label>
+          <select id="g-custom-dir"><option value="increase">Increase</option><option value="decrease">Decrease</option></select>
+        </div>
+      </div>
+      <div class="row-actions"><button class="action" onclick="saveGoals()">Save goals</button></div>
+      <div class="status" id="goals-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Log measurements</h2>
+      <div class="grid3">
+        <div class="field"><label>Date</label><input type="date" id="mm-date"></div>
+        <div class="field"><label>Weight (kg)</label><input type="number" id="mm-weight" step="0.1"></div>
+        <div class="field"><label>Waist (cm)</label><input type="number" id="mm-waist" step="0.1"></div>
+      </div>
+      <div class="grid3">
+        <div class="field"><label>Flexibility (cm)</label><input type="number" id="mm-flex" step="0.1"></div>
+        <div class="field"><label id="mm-custom-label-el">Custom metric</label><input type="number" id="mm-custom" step="0.1"></div>
+        <div class="field"><label>Notes</label><input type="text" id="mm-notes" placeholder="optional"></div>
+      </div>
+      <div class="row-actions"><button class="action" onclick="addMeasurement()">Log measurement</button></div>
+      <div class="status" id="mm-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Progress toward goals</h2>
+      <div id="progress-summary"></div>
+    </div>
+
+    <div class="card">
+      <h2>Measurement history</h2>
+      <div id="mm-list"></div>
+    </div>
+
     <div class="card">
       <h3>This week's split (reference)</h3>
       <table>
@@ -286,10 +341,15 @@
   <!-- MEALS -->
   <section id="meals" class="panel">
     <div class="card">
-      <h3>High-protein prep, built for strength — local & accessible</h3>
-      <p style="font-size:13.5px; color:var(--ink-soft); margin:0 0 6px;">Rough target: 1.6–2g protein per kg bodyweight/day. Batch-cook the staples (beans, rice, ugali, boiled eggs) on Sunday so weekday meals are just assembly.</p>
+      <h3>High-protein prep — edit to fit what you actually have access to</h3>
+      <p style="font-size:13.5px; color:var(--ink-soft); margin:0 0 6px;">Rough target: 1.6–2g protein per kg bodyweight/day. Edit any meal below directly, then save.</p>
     </div>
     <div class="day-grid" id="meal-grid"></div>
+    <div class="row-actions" style="margin: 4px 0 16px;">
+      <button class="action" onclick="saveMeals()">Save meal plan</button>
+      <button class="action secondary" onclick="resetMeals()">Reset to default</button>
+    </div>
+    <div class="status" id="m-status" style="margin: -10px 0 16px;"></div>
 
     <div class="card">
       <h2>Grocery list</h2>
@@ -436,6 +496,168 @@ async function delFitness(idx) {
   } catch(e) { console.error(e); }
 }
 
+// ---------- BODY GOALS & MEASUREMENTS ----------
+const DEFAULT_GOALS = { weight: null, waist: null, flex: null, customLabel: '', customTarget: null, customDir: 'increase' };
+
+async function loadGoals() {
+  let goals = {...DEFAULT_GOALS};
+  try {
+    const res = await storage.get('body-goals');
+    if (res && res.value) goals = {...DEFAULT_GOALS, ...JSON.parse(res.value)};
+  } catch(e) { /* none saved yet */ }
+  document.getElementById('g-weight').value = goals.weight ?? '';
+  document.getElementById('g-waist').value = goals.waist ?? '';
+  document.getElementById('g-flex').value = goals.flex ?? '';
+  document.getElementById('g-custom-label').value = goals.customLabel ?? '';
+  document.getElementById('g-custom-target').value = goals.customTarget ?? '';
+  document.getElementById('g-custom-dir').value = goals.customDir ?? 'increase';
+  const customLabelText = goals.customLabel ? goals.customLabel : 'Custom metric';
+  document.getElementById('mm-custom-label-el').textContent = customLabelText;
+  return goals;
+}
+async function saveGoals() {
+  const statusEl = document.getElementById('goals-status');
+  const goals = {
+    weight: document.getElementById('g-weight').value || null,
+    waist: document.getElementById('g-waist').value || null,
+    flex: document.getElementById('g-flex').value || null,
+    customLabel: document.getElementById('g-custom-label').value.trim(),
+    customTarget: document.getElementById('g-custom-target').value || null,
+    customDir: document.getElementById('g-custom-dir').value,
+  };
+  try {
+    const result = await storage.set('body-goals', JSON.stringify(goals));
+    if (!result) throw new Error('save failed');
+    document.getElementById('mm-custom-label-el').textContent = goals.customLabel || 'Custom metric';
+    statusEl.textContent = 'Goals saved.';
+    setTimeout(()=>statusEl.textContent='',1500);
+    renderProgress();
+  } catch(e) { statusEl.textContent = 'Could not save — try again.'; }
+}
+
+async function loadMeasurements() {
+  let entries = [];
+  try {
+    const res = await storage.get('measurements-log');
+    if (res && res.value) entries = JSON.parse(res.value);
+  } catch(e) { /* none yet */ }
+  renderMeasurementList(entries);
+  return entries;
+}
+function renderMeasurementList(entries) {
+  const list = document.getElementById('mm-list');
+  if (!entries.length) { list.innerHTML = '<div class="empty">No measurements logged yet.</div>'; return; }
+  const rows = entries.map((e, realIdx) => e).slice().reverse().map(e => {
+    const realIdx = entries.indexOf(e);
+    return `<tr><td>${e.date||''}</td><td class="num">${e.weight||''}</td><td class="num">${e.waist||''}</td><td class="num">${e.flex||''}</td><td class="num">${e.custom||''}</td><td>${e.notes||''}</td><td class="del" onclick="delMeasurement(${realIdx})">remove</td></tr>`;
+  }).join('');
+  list.innerHTML = `<table><tr><th>Date</th><th>Weight</th><th>Waist</th><th>Flex</th><th>Custom</th><th>Notes</th><th></th></tr>${rows}</table>`;
+}
+async function addMeasurement() {
+  const statusEl = document.getElementById('mm-status');
+  const date = document.getElementById('mm-date').value;
+  const entry = {
+    date,
+    weight: document.getElementById('mm-weight').value || null,
+    waist: document.getElementById('mm-waist').value || null,
+    flex: document.getElementById('mm-flex').value || null,
+    custom: document.getElementById('mm-custom').value || null,
+    notes: document.getElementById('mm-notes').value.trim(),
+  };
+  if (!entry.weight && !entry.waist && !entry.flex && !entry.custom) {
+    statusEl.textContent = 'Fill in at least one measurement.'; return;
+  }
+  try {
+    const entries = await loadMeasurements();
+    entries.push(entry);
+    const result = await storage.set('measurements-log', JSON.stringify(entries));
+    if (!result) throw new Error('save failed');
+    renderMeasurementList(entries);
+    document.getElementById('mm-weight').value = '';
+    document.getElementById('mm-waist').value = '';
+    document.getElementById('mm-flex').value = '';
+    document.getElementById('mm-custom').value = '';
+    document.getElementById('mm-notes').value = '';
+    statusEl.textContent = 'Logged.';
+    setTimeout(()=>statusEl.textContent='',1500);
+    renderProgress();
+  } catch(e) { statusEl.textContent = 'Could not save — try again.'; }
+}
+async function delMeasurement(idx) {
+  try {
+    const entries = await loadMeasurements();
+    entries.splice(idx,1);
+    await storage.set('measurements-log', JSON.stringify(entries));
+    renderMeasurementList(entries);
+    renderProgress();
+  } catch(e) { console.error(e); }
+}
+
+function valueNearOrBefore(sorted, metricKey, cutoffDate) {
+  let found = null;
+  for (const e of sorted) {
+    if (!e[metricKey]) continue;
+    const d = parseLocalDate(e.date);
+    if (!d) continue;
+    if (d.getTime() <= cutoffDate.getTime()) found = e[metricKey];
+  }
+  return found;
+}
+async function renderProgress() {
+  const el = document.getElementById('progress-summary');
+  const goals = {
+    weight: document.getElementById('g-weight').value || null,
+    waist: document.getElementById('g-waist').value || null,
+    flex: document.getElementById('g-flex').value || null,
+    customLabel: document.getElementById('g-custom-label').value.trim(),
+    customTarget: document.getElementById('g-custom-target').value || null,
+    customDir: document.getElementById('g-custom-dir').value,
+  };
+  let entries = [];
+  try {
+    const res = await storage.get('measurements-log');
+    if (res && res.value) entries = JSON.parse(res.value);
+  } catch(e) { /* none yet */ }
+
+  const metrics = [
+    { key: 'weight', label: 'Weight (kg)', target: goals.weight, dir: 'increase' },
+    { key: 'waist', label: 'Waist (cm)', target: goals.waist, dir: 'decrease' },
+    { key: 'flex', label: 'Flexibility (cm)', target: goals.flex, dir: 'increase' },
+    { key: 'custom', label: goals.customLabel || 'Custom metric', target: goals.customTarget, dir: goals.customDir },
+  ];
+  const active = metrics.filter(m => m.target !== null && m.target !== '' && entries.some(e => e[m.key]));
+  if (!active.length) {
+    el.innerHTML = '<div class="empty">Set a goal and log at least one measurement to see progress here.</div>';
+    return;
+  }
+  const sorted = entries.slice().sort((a,b) => (a.date||'').localeCompare(b.date||''));
+  const now = new Date();
+  const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
+  const monthAgo = new Date(now); monthAgo.setDate(monthAgo.getDate() - 30);
+
+  const rows = active.map(m => {
+    const current = Number(valueNearOrBefore(sorted, m.key, now));
+    const wk = valueNearOrBefore(sorted, m.key, weekAgo);
+    const mo = valueNearOrBefore(sorted, m.key, monthAgo);
+    const target = Number(m.target);
+    const remaining = m.dir === 'increase' ? target - current : current - target;
+    const reached = remaining <= 0;
+    const remainingLabel = reached ? 'Goal reached' : `${Math.abs(remaining).toFixed(1)} to go`;
+    const wkChange = wk !== null ? (current - Number(wk)) : null;
+    const moChange = mo !== null ? (current - Number(mo)) : null;
+    const fmtChange = (v) => v === null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1);
+    return `<tr>
+      <td>${m.label}</td>
+      <td class="num">${current}</td>
+      <td class="num">${target}</td>
+      <td class="num ${reached ? 'under' : ''}">${remainingLabel}</td>
+      <td class="num">${fmtChange(wkChange)}</td>
+      <td class="num">${fmtChange(moChange)}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table><tr><th>Metric</th><th>Current</th><th>Target</th><th>To go</th><th>7-day Δ</th><th>30-day Δ</th></tr>${rows}</table>`;
+}
+
 // ---------- BUDGET ----------
 async function loadBudget() {
   let entries = [];
@@ -531,17 +753,21 @@ async function delBudget(idx) {
 }
 
 // ---------- MEALS ----------
+function escAttr(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+}
 function renderMeals(meals) {
   const grid = document.getElementById('meal-grid');
-  grid.innerHTML = meals.map(m => `
+  grid.innerHTML = meals.map((m,i) => `
     <div class="day-card">
       <h4>${m.day} <span class="tag">${m.tag}</span></h4>
-      <div class="meal-line"><b>Breakfast</b>${m.b}</div>
-      <div class="meal-line"><b>Lunch</b>${m.l}</div>
-      <div class="meal-line"><b>Dinner</b>${m.d}</div>
+      <div class="meal-field"><b>Breakfast</b><input type="text" data-day="${i}" data-meal="b" value="${escAttr(m.b)}"></div>
+      <div class="meal-field"><b>Lunch</b><input type="text" data-day="${i}" data-meal="l" value="${escAttr(m.l)}"></div>
+      <div class="meal-field"><b>Dinner</b><input type="text" data-day="${i}" data-meal="d" value="${escAttr(m.d)}"></div>
     </div>
   `).join('');
 }
+let currentMeals = DEFAULT_MEALS;
 async function loadMeals() {
   let meals = DEFAULT_MEALS;
   try {
@@ -550,7 +776,34 @@ async function loadMeals() {
   } catch(e) {
     try { await storage.set('meals-plan', JSON.stringify(DEFAULT_MEALS)); } catch(e2) {}
   }
+  currentMeals = meals;
   renderMeals(meals);
+}
+async function saveMeals() {
+  const statusEl = document.getElementById('m-status');
+  try {
+    const updated = currentMeals.map((m, i) => ({...m}));
+    document.querySelectorAll('#meal-grid input[data-day]').forEach(input => {
+      const dayIdx = Number(input.dataset.day);
+      const mealKey = input.dataset.meal;
+      updated[dayIdx][mealKey] = input.value;
+    });
+    const result = await storage.set('meals-plan', JSON.stringify(updated));
+    if (!result) throw new Error('save failed');
+    currentMeals = updated;
+    statusEl.textContent = 'Meal plan saved.';
+    setTimeout(()=>statusEl.textContent='',1500);
+  } catch(e) { statusEl.textContent = 'Could not save — try again.'; }
+}
+async function resetMeals() {
+  try {
+    await storage.set('meals-plan', JSON.stringify(DEFAULT_MEALS));
+    currentMeals = DEFAULT_MEALS;
+    renderMeals(DEFAULT_MEALS);
+    const statusEl = document.getElementById('m-status');
+    statusEl.textContent = 'Reset to default.';
+    setTimeout(()=>statusEl.textContent='',1500);
+  } catch(e) { console.error(e); }
 }
 async function saveGroceries() {
   const val = document.getElementById('grocery').value;
@@ -581,7 +834,11 @@ function todayLocalStr() {
 (async function init() {
   document.getElementById('f-date').value = todayLocalStr();
   document.getElementById('b-date').value = todayLocalStr();
+  document.getElementById('mm-date').value = todayLocalStr();
   await loadFitness();
+  await loadGoals();
+  await loadMeasurements();
+  await renderProgress();
   await loadBudget();
   await loadMeals();
   await loadGroceries();
