@@ -1,6 +1,6 @@
 {
-  "name": "Field Book — Strength, Budget & Meals",
-  "short_name": "Field Book",
+  "name": "Annie's Field Book",
+  "short_name": "Annie's FB",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#EEF0E9",

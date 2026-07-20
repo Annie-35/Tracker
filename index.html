@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Field Book — Strength, Budget & Meals</title>
+<title>Annie's Field Book</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1F5C55">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Field Book">
+<meta name="apple-mobile-web-app-title" content="Annie's Field Book">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -175,7 +175,7 @@
 <body>
 <div class="wrap">
   <header>
-    <p class="eyebrow">Personal Field Book</p>
+    <p class="eyebrow">Annie's Field Book</p>
     <h1>Strength · Budget · Meals</h1>
     <p class="sub">One log for the week — lift, spend, and eat on purpose.</p>
   </header>
@@ -189,6 +189,12 @@
 
   <!-- FITNESS -->
   <section id="fitness" class="panel active">
+    <div class="card">
+      <div class="stat-strip">
+        <div class="stat"><div class="val" id="f-week-count">0</div><div class="lbl">Sessions this week</div></div>
+        <div class="stat"><div class="val" id="f-month-count">0</div><div class="lbl">Sessions this month</div></div>
+      </div>
+    </div>
     <div class="card">
       <h3>This week's split (reference)</h3>
       <table>
@@ -223,7 +229,7 @@
   <!-- BUDGET -->
   <section id="budget" class="panel">
     <div class="card">
-      <h2>This week</h2>
+      <h2 id="b-stat-title">This week</h2>
       <div class="stat-strip">
         <div class="stat"><div class="val" id="b-income">KES 0</div><div class="lbl">Income logged</div></div>
         <div class="stat"><div class="val" id="b-spent">KES 0</div><div class="lbl">Spent</div></div>
@@ -260,6 +266,15 @@
       </div>
       <div class="row-actions"><button class="action" onclick="addBudget()">Add entry</button></div>
       <div class="status" id="b-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Progress review</h2>
+      <div class="row-actions" style="margin-top:0; margin-bottom:12px;">
+        <button class="action" id="b-view-weekly" onclick="setBudgetView('weekly')">Weekly</button>
+        <button class="action secondary" id="b-view-monthly" onclick="setBudgetView('monthly')">Monthly</button>
+      </div>
+      <div id="b-summary"></div>
     </div>
 
     <div class="card">
@@ -321,6 +336,53 @@ document.querySelectorAll('nav.tabs button').forEach(btn => {
 
 function fmtKES(n) { return 'KES ' + Number(n).toLocaleString('en-KE', {maximumFractionDigits:0}); }
 
+// ---------- DATE / PERIOD HELPERS ----------
+function parseLocalDate(str) {
+  if (!str) return null;
+  const [y,m,d] = str.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function weekStart(date) {
+  const d = new Date(date);
+  const day = (d.getDay() + 6) % 7; // Monday = 0
+  d.setDate(d.getDate() - day);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function isSamePeriod(entryDateStr, granularity) {
+  const d = parseLocalDate(entryDateStr);
+  if (!d) return false;
+  const now = new Date();
+  if (granularity === 'week') {
+    return weekStart(d).getTime() === weekStart(now).getTime();
+  }
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
+function localDateStr(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+function periodKey(entryDateStr, granularity) {
+  const d = parseLocalDate(entryDateStr);
+  if (!d) return 'unknown';
+  if (granularity === 'week') {
+    return localDateStr(weekStart(d));
+  }
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function periodLabel(key, granularity) {
+  if (granularity === 'week') {
+    const start = parseLocalDate(key);
+    const end = new Date(start); end.setDate(end.getDate() + 6);
+    const opts = {month:'short', day:'numeric'};
+    return `${start.toLocaleDateString('en-US', opts)} – ${end.toLocaleDateString('en-US', opts)}`;
+  }
+  const [y,m] = key.split('-').map(Number);
+  return new Date(y, m-1, 1).toLocaleDateString('en-US', {month:'long', year:'numeric'});
+}
+
 // ---------- FITNESS ----------
 async function loadFitness() {
   let entries = [];
@@ -332,6 +394,11 @@ async function loadFitness() {
   return entries;
 }
 function renderFitness(entries) {
+  const weekCount = entries.filter(e => isSamePeriod(e.date, 'week')).length;
+  const monthCount = entries.filter(e => isSamePeriod(e.date, 'month')).length;
+  document.getElementById('f-week-count').textContent = weekCount;
+  document.getElementById('f-month-count').textContent = monthCount;
+
   const list = document.getElementById('f-list');
   if (!entries.length) { list.innerHTML = '<div class="empty">No sessions logged yet.</div>'; return; }
   const rows = entries.slice().reverse().map((e,i) => {
@@ -379,10 +446,19 @@ async function loadBudget() {
   renderBudget(entries);
   return entries;
 }
+let budgetView = 'weekly';
+function setBudgetView(view) {
+  budgetView = view;
+  document.getElementById('b-view-weekly').className = 'action' + (view==='weekly' ? '' : ' secondary');
+  document.getElementById('b-view-monthly').className = 'action' + (view==='monthly' ? '' : ' secondary');
+  loadBudget();
+}
+
 function renderBudget(entries) {
-  const list = document.getElementById('b-list');
+  document.getElementById('b-stat-title').textContent = 'This week';
+  const weekEntries = entries.filter(e => isSamePeriod(e.date, 'week'));
   let income = 0, spent = 0;
-  entries.forEach(e => { if (e.type==='income') income += Number(e.amount); else spent += Number(e.amount); });
+  weekEntries.forEach(e => { if (e.type==='income') income += Number(e.amount); else spent += Number(e.amount); });
   document.getElementById('b-income').textContent = fmtKES(income);
   document.getElementById('b-spent').textContent = fmtKES(spent);
   const left = income - spent;
@@ -390,13 +466,40 @@ function renderBudget(entries) {
   leftEl.textContent = fmtKES(Math.abs(left));
   leftEl.className = 'val ' + (left < 0 ? 'over' : 'under');
 
-  if (!entries.length) { list.innerHTML = '<div class="empty">No entries yet this week.</div>'; return; }
-  const rows = entries.slice().reverse().map((e,i) => {
-    const realIdx = entries.length - 1 - i;
+  const list = document.getElementById('b-list');
+  if (!weekEntries.length) { list.innerHTML = '<div class="empty">No entries yet this week.</div>'; return; }
+  const indexed = entries.map((e,i) => ({...e, _idx:i})).filter(e => isSamePeriod(e.date, 'week'));
+  const rows = indexed.slice().reverse().map(e => {
     const sign = e.type === 'income' ? '+' : '−';
-    return `<tr><td>${e.date||''}</td><td>${e.category}</td><td>${e.note||''}</td><td class="num">${sign}${fmtKES(e.amount)}</td><td class="del" onclick="delBudget(${realIdx})">remove</td></tr>`;
+    return `<tr><td>${e.date||''}</td><td>${e.category}</td><td>${e.note||''}</td><td class="num">${sign}${fmtKES(e.amount)}</td><td class="del" onclick="delBudget(${e._idx})">remove</td></tr>`;
   }).join('');
   list.innerHTML = `<table><tr><th>Date</th><th>Category</th><th>Note</th><th>Amount</th><th></th></tr>${rows}</table>`;
+
+  renderBudgetSummary(entries);
+}
+
+function renderBudgetSummary(entries) {
+  const el = document.getElementById('b-summary');
+  if (!entries.length) { el.innerHTML = '<div class="empty">Log a few entries to see your review here.</div>'; return; }
+  const granularity = budgetView === 'weekly' ? 'week' : 'month';
+  const groups = {};
+  entries.forEach(e => {
+    if (!e.date) return;
+    const key = periodKey(e.date, granularity);
+    if (!groups[key]) groups[key] = { income: 0, spent: 0 };
+    if (e.type === 'income') groups[key].income += Number(e.amount);
+    else groups[key].spent += Number(e.amount);
+  });
+  const keys = Object.keys(groups).sort().reverse().slice(0, 8);
+  if (!keys.length) { el.innerHTML = '<div class="empty">Log a few entries to see your review here.</div>'; return; }
+  const rows = keys.map(k => {
+    const g = groups[k];
+    const net = g.income - g.spent;
+    const netClass = net < 0 ? 'over' : 'under';
+    const netLabel = net < 0 ? `Overspent ${fmtKES(Math.abs(net))}` : `Saved ${fmtKES(net)}`;
+    return `<tr><td>${periodLabel(k, granularity)}</td><td class="num">${fmtKES(g.income)}</td><td class="num">${fmtKES(g.spent)}</td><td class="num ${netClass}">${netLabel}</td></tr>`;
+  }).join('');
+  el.innerHTML = `<table><tr><th>Period</th><th>Income</th><th>Spent</th><th>Net</th></tr>${rows}</table>`;
 }
 async function addBudget() {
   const date = document.getElementById('b-date').value;
