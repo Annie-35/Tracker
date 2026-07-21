@@ -203,6 +203,7 @@
       <div class="stat-strip">
         <div class="stat"><div class="val" id="f-week-count">0</div><div class="lbl">Sessions this week</div></div>
         <div class="stat"><div class="val" id="f-month-count">0</div><div class="lbl">Sessions this month</div></div>
+        <div class="stat"><div class="val" id="f-avg-duration">—</div><div class="lbl">Avg length this week</div></div>
       </div>
     </div>
     <div class="card">
@@ -270,7 +271,10 @@
         <div class="field"><label>Exercise</label><input type="text" id="f-exercise" placeholder="e.g. Back squat"></div>
         <div class="field"><label>Sets × Reps</label><input type="text" id="f-setsreps" placeholder="e.g. 4x8"></div>
       </div>
-      <div class="field" style="max-width:200px;"><label>Weight (kg)</label><input type="number" id="f-weight" placeholder="0"></div>
+      <div class="grid2">
+        <div class="field" style="max-width:200px;"><label>Weight (kg)</label><input type="number" id="f-weight" placeholder="0"></div>
+        <div class="field" style="max-width:200px;"><label>Session length (min)</label><input type="number" id="f-duration" placeholder="e.g. 50"></div>
+      </div>
       <div class="row-actions"><button class="action" onclick="addFitness()">Log it</button></div>
       <div class="status" id="f-status"></div>
     </div>
@@ -454,35 +458,45 @@ async function loadFitness() {
   return entries;
 }
 function renderFitness(entries) {
-  const weekCount = entries.filter(e => isSamePeriod(e.date, 'week')).length;
-  const monthCount = entries.filter(e => isSamePeriod(e.date, 'month')).length;
-  document.getElementById('f-week-count').textContent = weekCount;
-  document.getElementById('f-month-count').textContent = monthCount;
+  const weekEntries = entries.filter(e => isSamePeriod(e.date, 'week'));
+  document.getElementById('f-week-count').textContent = weekEntries.length;
+  document.getElementById('f-month-count').textContent = entries.filter(e => isSamePeriod(e.date, 'month')).length;
+
+  // Average session length this week — one duration counted per distinct day, not per exercise row
+  const durationsByDay = {};
+  weekEntries.forEach(e => {
+    if (e.duration && e.date && !(e.date in durationsByDay)) durationsByDay[e.date] = Number(e.duration);
+  });
+  const durs = Object.values(durationsByDay);
+  const avgEl = document.getElementById('f-avg-duration');
+  avgEl.textContent = durs.length ? Math.round(durs.reduce((a,b)=>a+b,0)/durs.length) + ' min' : '—';
 
   const list = document.getElementById('f-list');
   if (!entries.length) { list.innerHTML = '<div class="empty">No sessions logged yet.</div>'; return; }
   const rows = entries.slice().reverse().map((e,i) => {
     const realIdx = entries.length - 1 - i;
-    return `<tr><td>${e.date||''}</td><td>${e.exercise}</td><td class="num">${e.setsreps||''}</td><td class="num">${e.weight?e.weight+'kg':''}</td><td class="del" onclick="delFitness(${realIdx})">remove</td></tr>`;
+    return `<tr><td>${e.date||''}</td><td>${e.exercise}</td><td class="num">${e.setsreps||''}</td><td class="num">${e.weight?e.weight+'kg':''}</td><td class="num">${e.duration?e.duration+'min':''}</td><td class="del" onclick="delFitness(${realIdx})">remove</td></tr>`;
   }).join('');
-  list.innerHTML = `<table><tr><th>Date</th><th>Exercise</th><th>Sets×Reps</th><th>Weight</th><th></th></tr>${rows}</table>`;
+  list.innerHTML = `<table><tr><th>Date</th><th>Exercise</th><th>Sets×Reps</th><th>Weight</th><th>Length</th><th></th></tr>${rows}</table>`;
 }
 async function addFitness() {
   const date = document.getElementById('f-date').value;
   const exercise = document.getElementById('f-exercise').value.trim();
   const setsreps = document.getElementById('f-setsreps').value.trim();
   const weight = document.getElementById('f-weight').value;
+  const duration = document.getElementById('f-duration').value;
   const statusEl = document.getElementById('f-status');
   if (!exercise) { statusEl.textContent = 'Add an exercise name first.'; return; }
   try {
     const entries = await loadFitness();
-    entries.push({date, exercise, setsreps, weight});
+    entries.push({date, exercise, setsreps, weight, duration});
     const result = await storage.set('fitness-log', JSON.stringify(entries));
     if (!result) throw new Error('save failed');
     renderFitness(entries);
     document.getElementById('f-exercise').value='';
     document.getElementById('f-setsreps').value='';
     document.getElementById('f-weight').value='';
+    document.getElementById('f-duration').value='';
     statusEl.textContent = 'Logged.';
     setTimeout(()=>statusEl.textContent='',1500);
   } catch(e) { statusEl.textContent = 'Could not save — try again.'; }
