@@ -357,9 +357,9 @@
 
     <div class="card">
       <h2>Grocery list</h2>
-      <p style="font-size:12.5px; color:var(--ink-soft); margin:0 0 8px;">Edit freely — saved automatically.</p>
-      <textarea id="grocery" rows="8" placeholder="Eggs (2 trays)&#10;Chicken 2kg&#10;Tilapia or omena&#10;Beans / ndengu 2kg&#10;Milk 3L&#10;Sukuma wiki&#10;Rice, ugali flour&#10;Groundnuts, avocado, sweet potatoes"></textarea>
-      <div class="row-actions"><button class="action" onclick="saveGroceries()">Save list</button></div>
+      <p style="font-size:12.5px; color:var(--ink-soft); margin:0 0 8px;">Add items, fill in prices as you shop or plan — the total updates automatically.</p>
+      <div id="grocery-table"></div>
+      <div class="row-actions"><button class="action" onclick="addGroceryItem()">Add item</button></div>
       <div class="status" id="g-status"></div>
     </div>
   </section>
@@ -819,21 +819,83 @@ async function resetMeals() {
     setTimeout(()=>statusEl.textContent='',1500);
   } catch(e) { console.error(e); }
 }
-async function saveGroceries() {
-  const val = document.getElementById('grocery').value;
-  const statusEl = document.getElementById('g-status');
-  try {
-    const result = await storage.set('grocery-list', val);
-    if (!result) throw new Error('save failed');
-    statusEl.textContent = 'Saved.';
-    setTimeout(()=>statusEl.textContent='',1500);
-  } catch(e) { statusEl.textContent = 'Could not save — try again.'; }
+const DEFAULT_GROCERIES = [
+  {item: 'Eggs (2 trays)', price: ''},
+  {item: 'Chicken 2kg', price: ''},
+  {item: 'Tilapia or omena', price: ''},
+  {item: 'Beans / ndengu 2kg', price: ''},
+  {item: 'Milk 3L', price: ''},
+  {item: 'Sukuma wiki', price: ''},
+  {item: 'Rice, ugali flour', price: ''},
+  {item: 'Groundnuts, avocado, sweet potatoes', price: ''},
+];
+
+function renderGroceryTable(items) {
+  const el = document.getElementById('grocery-table');
+  if (!items.length) { el.innerHTML = '<div class="empty">No items yet — add one below.</div>'; return; }
+  const total = items.reduce((sum, it) => sum + (Number(it.price) || 0), 0);
+  const rows = items.map((it, idx) => `
+    <tr>
+      <td><input type="text" value="${escAttr(it.item)}" oninput="updateGroceryItem(${idx}, 'item', this.value)" placeholder="Item"></td>
+      <td style="width:110px;"><input type="number" value="${it.price !== '' && it.price !== null ? it.price : ''}" oninput="updateGroceryItem(${idx}, 'price', this.value)" placeholder="0"></td>
+      <td class="del" onclick="delGroceryItem(${idx})">remove</td>
+    </tr>`).join('');
+  el.innerHTML = `<table>
+    <tr><th>Item</th><th>Price (KES)</th><th></th></tr>
+    ${rows}
+    <tr><td><b>Total</b></td><td class="num"><b>${fmtKES(total)}</b></td><td></td></tr>
+  </table>`;
 }
+
+let groceryItems = [];
 async function loadGroceries() {
   try {
     const res = await storage.get('grocery-list');
-    if (res && res.value) document.getElementById('grocery').value = res.value;
-  } catch(e) { /* nothing saved yet */ }
+    if (res && res.value) {
+      try {
+        const parsed = JSON.parse(res.value);
+        groceryItems = Array.isArray(parsed) ? parsed : DEFAULT_GROCERIES;
+      } catch (e) {
+        // legacy plain-text list — migrate each line into an item with no price yet
+        groceryItems = res.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => ({item: l, price: ''}));
+      }
+    } else {
+      groceryItems = DEFAULT_GROCERIES;
+    }
+  } catch(e) {
+    groceryItems = DEFAULT_GROCERIES;
+  }
+  renderGroceryTable(groceryItems);
+}
+async function persistGroceries() {
+  const statusEl = document.getElementById('g-status');
+  try {
+    const result = await storage.set('grocery-list', JSON.stringify(groceryItems));
+    if (!result) throw new Error('save failed');
+    statusEl.textContent = 'Saved.';
+    setTimeout(()=>statusEl.textContent='',1200);
+  } catch(e) { statusEl.textContent = 'Could not save — try again.'; }
+}
+function updateGroceryItem(idx, field, value) {
+  groceryItems[idx][field] = value;
+  const total = groceryItems.reduce((sum, it) => sum + (Number(it.price) || 0), 0);
+  // update just the total cell without re-rendering (keeps focus in the input being typed)
+  const table = document.querySelector('#grocery-table table');
+  if (table) {
+    const totalCell = table.querySelector('tr:last-child td:nth-child(2) b');
+    if (totalCell) totalCell.textContent = fmtKES(total);
+  }
+  persistGroceries();
+}
+function addGroceryItem() {
+  groceryItems.push({item: '', price: ''});
+  renderGroceryTable(groceryItems);
+  persistGroceries();
+}
+function delGroceryItem(idx) {
+  groceryItems.splice(idx, 1);
+  renderGroceryTable(groceryItems);
+  persistGroceries();
 }
 
 function todayLocalStr() {
