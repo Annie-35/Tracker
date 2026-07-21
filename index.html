@@ -328,6 +328,13 @@
     </div>
 
     <div class="card">
+      <h2>Daily ledger</h2>
+      <p style="font-size:12.5px; color:var(--ink-soft); margin:0 0 10px;">Pick any date to see your balance carried in, what moved that day, and what you closed with.</p>
+      <div class="field" style="max-width:220px;"><label>Date</label><input type="date" id="ledger-date" onchange="renderLedger()"></div>
+      <div id="ledger-view" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card">
       <h2>Progress review</h2>
       <div class="row-actions" style="margin-top:0; margin-bottom:12px;">
         <button class="action" id="b-view-weekly" onclick="setBudgetView('weekly')">Weekly</button>
@@ -690,6 +697,8 @@ function setBudgetView(view) {
   loadBudget();
 }
 
+const BUDGET_CATEGORIES = ['Essentials', 'Savings', 'Discretionary', 'Freelance/business', 'Base income', 'Freelance income'];
+
 function renderBudget(entries) {
   document.getElementById('b-stat-title').textContent = 'This week';
   const weekEntries = entries.filter(e => isSamePeriod(e.date, 'week'));
@@ -751,6 +760,7 @@ async function addBudget() {
     const result = await storage.set('budget-log', JSON.stringify(entries));
     if (!result) throw new Error('save failed');
     renderBudget(entries);
+    renderLedger();
     document.getElementById('b-amount').value='';
     document.getElementById('b-note').value='';
     statusEl.textContent = 'Added.';
@@ -763,7 +773,46 @@ async function delBudget(idx) {
     entries.splice(idx,1);
     await storage.set('budget-log', JSON.stringify(entries));
     renderBudget(entries);
+    renderLedger();
   } catch(e) { console.error(e); }
+}
+
+// ---------- DAILY LEDGER ----------
+async function renderLedger() {
+  const dateInput = document.getElementById('ledger-date');
+  const dateStr = dateInput.value || todayLocalStr();
+  const el = document.getElementById('ledger-view');
+  let entries = [];
+  try {
+    const res = await storage.get('budget-log');
+    if (res && res.value) entries = JSON.parse(res.value);
+  } catch(e) { /* none yet */ }
+
+  const dated = entries.filter(e => e.date);
+  let opening = 0;
+  dated.forEach(e => {
+    if (e.date < dateStr) opening += (e.type === 'income' ? Number(e.amount) : -Number(e.amount));
+  });
+  const dayEntries = dated.filter(e => e.date === dateStr);
+  let net = 0;
+  dayEntries.forEach(e => { net += (e.type === 'income' ? Number(e.amount) : -Number(e.amount)); });
+  const closing = opening + net;
+
+  const rows = dayEntries.map(e => {
+    const sign = e.type === 'income' ? '+' : '−';
+    return `<tr><td>${e.category}</td><td>${e.note||''}</td><td class="num">${sign}${fmtKES(e.amount)}</td></tr>`;
+  }).join('');
+  const table = dayEntries.length
+    ? `<table><tr><th>Category</th><th>Note</th><th>Amount</th></tr>${rows}</table>`
+    : '<div class="empty">No transactions on this date.</div>';
+
+  el.innerHTML = `
+    <div class="stat-strip" style="margin-bottom:10px;">
+      <div class="stat"><div class="val">${fmtKES(opening)}</div><div class="lbl">Opening balance</div></div>
+      <div class="stat"><div class="val ${closing < opening ? 'over' : 'under'}">${fmtKES(closing)}</div><div class="lbl">Closing balance</div></div>
+    </div>
+    ${table}
+  `;
 }
 
 // ---------- MEALS ----------
@@ -908,14 +957,18 @@ function todayLocalStr() {
 
 // init
 (async function init() {
-  document.getElementById('f-date').value = todayLocalStr();
-  document.getElementById('b-date').value = todayLocalStr();
-  document.getElementById('mm-date').value = todayLocalStr();
+  const today = todayLocalStr();
+  ['f-date', 'b-date', 'mm-date', 'ledger-date'].forEach(id => {
+    const el = document.getElementById(id);
+    el.value = today;
+    el.max = today;
+  });
   await loadFitness();
   await loadGoals();
   await loadMeasurements();
   await renderProgress();
   await loadBudget();
+  await renderLedger();
   await loadMeals();
   await loadGroceries();
 })();
