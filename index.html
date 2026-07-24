@@ -184,10 +184,30 @@
 </head>
 <body>
 <div class="wrap">
-  <header>
+
+  <!-- SIGN-IN GATE -->
+  <div id="signin-screen" style="min-height:70vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
     <p class="eyebrow">Annie's Field Book</p>
-    <h1>Strength · Budget · Meals</h1>
-    <p class="sub">One log for the week — lift, spend, and eat on purpose.</p>
+    <h1 style="margin-bottom:6px;">Strength · Budget · Meals</h1>
+    <p class="sub" style="margin-bottom:24px;">Sign in to save your own private, synced log.</p>
+    <button class="action" id="signin-btn" style="font-size:15px; padding:12px 22px;" onclick="signIn()">Sign in with Google</button>
+    <div class="status" id="signin-status" style="margin-top:14px;"></div>
+  </div>
+
+  <!-- MAIN APP (hidden until signed in) -->
+  <div id="app-content" style="display:none;">
+  <header>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+      <div>
+        <p class="eyebrow">Annie's Field Book</p>
+        <h1>Strength · Budget · Meals</h1>
+        <p class="sub">One log for the week — lift, spend, and eat on purpose.</p>
+      </div>
+      <div style="text-align:right; flex-shrink:0;">
+        <div id="user-name" style="font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-soft); margin-bottom:6px;"></div>
+        <button class="action secondary" style="font-size:12.5px; padding:6px 12px;" onclick="signOutUser()">Sign out</button>
+      </div>
+    </div>
   </header>
   <div class="contour"></div>
 
@@ -370,18 +390,77 @@
       <div class="status" id="g-status"></div>
     </div>
   </section>
+  </div><!-- /app-content -->
 </div>
 
-<script>
-// Local storage shim — mirrors the get/set shape used below, but persists
-// on-device via localStorage so this works as a standalone hosted app.
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAT1JDoJdlYhYwgQiJKuhwvnuuMMPgtY6I",
+  authDomain: "annie-732bb.firebaseapp.com",
+  projectId: "annie-732bb",
+  storageBucket: "annie-732bb.firebasestorage.app",
+  messagingSenderId: "737239591723",
+  appId: "1:737239591723:web:66da8b4b2c92c97ee8b36e"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+let currentUser = null;
+
+window.signIn = async function() {
+  const statusEl = document.getElementById('signin-status');
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    statusEl.textContent = 'Sign-in failed — please try again.';
+    console.error(e);
+  }
+};
+window.signOutUser = async function() {
+  try { await signOut(auth); } catch(e) { console.error(e); }
+};
+
+onAuthStateChanged(auth, async (user) => {
+  currentUser = user;
+  const signinScreen = document.getElementById('signin-screen');
+  const appContent = document.getElementById('app-content');
+  if (user) {
+    signinScreen.style.display = 'none';
+    appContent.style.display = 'block';
+    document.getElementById('user-name').textContent = user.displayName || user.email || '';
+    await initApp();
+  } else {
+    signinScreen.style.display = 'flex';
+    appContent.style.display = 'none';
+  }
+});
+
+// Firestore-backed storage — each key becomes one document under the signed-in
+// user's own space, so every person's data stays separate automatically.
 const storage = {
   async get(key) {
-    const raw = localStorage.getItem(key);
-    return raw === null ? null : { key, value: raw };
+    if (!currentUser) return null;
+    const ref = doc(db, 'users', currentUser.uid, 'data', key);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    return { key, value: snap.data().value };
   },
   async set(key, value) {
-    localStorage.setItem(key, value);
+    if (!currentUser) return null;
+    const ref = doc(db, 'users', currentUser.uid, 'data', key);
+    await setDoc(ref, { value });
     return { key, value };
   }
 };
@@ -955,8 +1034,8 @@ function todayLocalStr() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// init
-(async function init() {
+// app init — called once per sign-in, from onAuthStateChanged above
+window.initApp = async function initApp() {
   const today = todayLocalStr();
   ['f-date', 'b-date', 'mm-date', 'ledger-date'].forEach(id => {
     const el = document.getElementById(id);
@@ -971,7 +1050,16 @@ function todayLocalStr() {
   await renderLedger();
   await loadMeals();
   await loadGroceries();
-})();
+};
+
+// Expose functions referenced by inline onclick/onchange/oninput handlers —
+// required because module scripts don't leak declarations onto window.
+Object.assign(window, {
+  addBudget, addFitness, addGroceryItem, addMeasurement,
+  delBudget, delFitness, delGroceryItem, delMeasurement,
+  resetMeals, saveGoals, saveMeals, setBudgetView,
+  renderLedger, updateGroceryItem, saveGroceries: persistGroceries,
+});
 </script>
 </body>
 </html>
