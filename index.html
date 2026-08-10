@@ -204,7 +204,8 @@
         <p class="sub">One log for the week — lift, spend, and eat on purpose.</p>
       </div>
       <div style="text-align:right; flex-shrink:0;">
-        <div id="user-name" style="font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-soft); margin-bottom:6px;"></div>
+        <div id="user-name" style="font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-soft); margin-bottom:2px;"></div>
+        <div id="conn-status" style="font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--ochre); margin-bottom:6px; display:none;">● Offline — saving locally</div>
         <button class="action secondary" style="font-size:12.5px; padding:6px 12px;" onclick="signOutUser()">Sign out</button>
       </div>
     </div>
@@ -396,10 +397,12 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
+  setPersistence, browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  doc, getDoc, getDocFromCache, setDoc, enableNetwork, disableNetwork
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 // Your web app's Firebase configuration
@@ -414,10 +417,29 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+
+// Local Auth persistence — keeps you signed in across app restarts and
+// device reboots, so Google sign-in is only needed once (until you sign out).
+setPersistence(auth, browserLocalPersistence).catch(err => console.error('Auth persistence error:', err));
+
+// Offline-capable Firestore — reads come from a local cache when offline,
+// and writes queue locally and sync automatically once back online, so
+// nothing gets lost even if the app is closed before a sync completes.
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
+
 const provider = new GoogleAuthProvider();
 
 let currentUser = null;
+
+function updateConnStatus() {
+  const el = document.getElementById('conn-status');
+  if (!el) return;
+  el.style.display = navigator.onLine ? 'none' : 'block';
+}
+window.addEventListener('online', updateConnStatus);
+window.addEventListener('offline', updateConnStatus);
 
 window.signIn = async function() {
   const statusEl = document.getElementById('signin-status');
@@ -440,6 +462,7 @@ onAuthStateChanged(auth, async (user) => {
     signinScreen.style.display = 'none';
     appContent.style.display = 'block';
     document.getElementById('user-name').textContent = user.displayName || user.email || '';
+    updateConnStatus();
     await initApp();
   } else {
     signinScreen.style.display = 'flex';
@@ -539,7 +562,11 @@ async function loadFitness() {
   try {
     const res = await storage.get('fitness-log');
     if (res && res.value) entries = JSON.parse(res.value);
-  } catch(e) { /* no data yet */ }
+  } catch(e) {
+    console.error('Could not load fitness log:', e);
+    document.getElementById('f-status').textContent = 'Could not load your saved data — check your connection.';
+    return null; // signal failure so callers don't overwrite real data with an empty list
+  }
   renderFitness(entries);
   return entries;
 }
@@ -575,6 +602,7 @@ async function addFitness() {
   if (!exercise) { statusEl.textContent = 'Add an exercise name first.'; return; }
   try {
     const entries = await loadFitness();
+    if (entries === null) { statusEl.textContent = 'Could not load your existing log — try again before adding.'; return; }
     entries.push({date, exercise, setsreps, weight, duration});
     const result = await storage.set('fitness-log', JSON.stringify(entries));
     if (!result) throw new Error('save failed');
@@ -590,6 +618,7 @@ async function addFitness() {
 async function delFitness(idx) {
   try {
     const entries = await loadFitness();
+    if (entries === null) return;
     entries.splice(idx,1);
     await storage.set('fitness-log', JSON.stringify(entries));
     renderFitness(entries);
@@ -640,7 +669,11 @@ async function loadMeasurements() {
   try {
     const res = await storage.get('measurements-log');
     if (res && res.value) entries = JSON.parse(res.value);
-  } catch(e) { /* none yet */ }
+  } catch(e) {
+    console.error('Could not load measurements:', e);
+    document.getElementById('mm-status').textContent = 'Could not load your saved data — check your connection.';
+    return null;
+  }
   renderMeasurementList(entries);
   return entries;
 }
@@ -669,6 +702,7 @@ async function addMeasurement() {
   }
   try {
     const entries = await loadMeasurements();
+    if (entries === null) { statusEl.textContent = 'Could not load your existing log — try again before adding.'; return; }
     entries.push(entry);
     const result = await storage.set('measurements-log', JSON.stringify(entries));
     if (!result) throw new Error('save failed');
@@ -686,6 +720,7 @@ async function addMeasurement() {
 async function delMeasurement(idx) {
   try {
     const entries = await loadMeasurements();
+    if (entries === null) return;
     entries.splice(idx,1);
     await storage.set('measurements-log', JSON.stringify(entries));
     renderMeasurementList(entries);
@@ -764,7 +799,11 @@ async function loadBudget() {
   try {
     const res = await storage.get('budget-log');
     if (res && res.value) entries = JSON.parse(res.value);
-  } catch(e) { /* no data yet */ }
+  } catch(e) {
+    console.error('Could not load budget log:', e);
+    document.getElementById('b-status').textContent = 'Could not load your saved data — check your connection.';
+    return null;
+  }
   renderBudget(entries);
   return entries;
 }
@@ -835,6 +874,7 @@ async function addBudget() {
   if (!amount || Number(amount) <= 0) { statusEl.textContent = 'Enter an amount first.'; return; }
   try {
     const entries = await loadBudget();
+    if (entries === null) { statusEl.textContent = 'Could not load your existing log — try again before adding.'; return; }
     entries.push({date, type, amount, category, note});
     const result = await storage.set('budget-log', JSON.stringify(entries));
     if (!result) throw new Error('save failed');
@@ -849,6 +889,7 @@ async function addBudget() {
 async function delBudget(idx) {
   try {
     const entries = await loadBudget();
+    if (entries === null) return;
     entries.splice(idx,1);
     await storage.set('budget-log', JSON.stringify(entries));
     renderBudget(entries);
