@@ -2,6 +2,8 @@
   "name": "Annie's Field Book",
   "short_name": "Annie's FB",
   "start_url": "./index.html",
+  "scope": "./",
+  "id": "./index.html",
   "display": "standalone",
   "background_color": "#EEF0E9",
   "theme_color": "#1F5C55",
